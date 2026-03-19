@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Circuit System Dashboard</title>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<style>
+body{
+    font-family:Segoe UI; 
+    margin:10px; 
+    background:#0f172a; 
+    color:white; 
+    overflow-x:hidden; 
+    font-size:14px;
+}
+h1{
+    text-align:center; 
+    font-size:44px; 
+    color:#38bdf8; 
+}
+/* TREE */
+.tree{
+    margin:0 auto; 
+    width:100%; 
+    border:1px solid #334155; 
+    background:#1e293b; 
+    border-radius:16px; 
+    position:relative; 
+    overflow:hidden; 
+    padding-top:50px; 
+}
+/* NODES */
+.node rect{
+    stroke:#38bdf8; 
+    stroke-width:3; 
+    rx:24; 
+    ry:24; 
+    fill-opacity:0.95; 
+    filter: drop-shadow(0px 6px 10px rgba(0,0,0,0.7)); 
+}
+.node text{
+    font-weight:bold; 
+    fill:white; 
+    pointer-events:none; 
+    font-size:18px; 
+    text-anchor:middle; 
+    dominant-baseline:middle; 
+}
+/* LINKS */
+.link{
+    fill:none; 
+    stroke:#64748b; 
+    stroke-width:2; 
+}
+/* TOOLTIP */
+.tooltip{
+    position:absolute; 
+    background:#020617; 
+    border:1px solid #38bdf8; 
+    padding:8px 12px; 
+    border-radius:6px; 
+    font-size:14px; 
+    pointer-events:none; 
+    opacity:0; 
+}
+/* SERVICE CIRCLES */
+.summary{
+    position:absolute; 
+    top:20px; 
+    left:20px; 
+    display:flex; 
+    flex-direction:column; 
+    gap:16px; 
+    z-index:10; 
+}
+.summary-row{
+    display:flex; 
+    gap:16px; 
+}
+.circle{
+    width:200px; 
+    height:200px; 
+    border-radius:50%; 
+    display:flex; 
+    flex-direction:column; 
+    justify-content:center; 
+    align-items:center; 
+    font-weight:bold; 
+    font-size:16px; 
+    text-align:center; 
+    line-height:1.2; 
+    color:white; 
+    box-shadow:0 0 16px rgba(0,0,0,0.7); 
+}
+.circle span:first-child{
+    font-size:20px; 
+}
+.circle span:last-child{
+    font-size:24px; 
+}
+/* TABLE */
+table{
+    border-collapse:collapse; 
+    width:100%; 
+    margin-top:25px; 
+    background:#1e293b; 
+    border-radius:12px; 
+}
+th,td{
+    border:1px solid #334155; 
+    padding:12px; 
+    text-align:center; 
+    font-size:18px; 
+}
+th{
+    background:#2563eb; 
+    font-size:18px; 
+    font-weight:bold; 
+}
+/* FORM */
+h3{
+    font-size:36px; 
+    font-weight:bold; 
+    color:#38bdf8;
+}
+select, button{
+    font-size:20px; /* نص الحجم الحالي تقريبا */
+    font-weight:bold;
+    padding:14px 22px; 
+    margin:0; 
+    border-radius:8px; 
+    border:none; 
+    text-align:center; 
+    text-align-last:center;
+    cursor:pointer;
+    min-width:180px;
+}
+
+/* زر Show أخضر */
+form#scisForm button, form#borderForm button{
+    background:#22c55e;
+    color:white;
+}
+
+form#scisForm button:hover, form#borderForm button:hover{
+    background:#16a34a;
+}
+
+/* زر Export أخضر */
+form[action="/export"] button{
+    background:#22c55e; 
+    color:white;
+}
+
+form[action="/export"] button:hover{
+    background:#16a34a; 
+    color:white;
+}
+
+.form-row{
+    display:flex; 
+    gap:40px; 
+    align-items:flex-start; 
+    flex-wrap:wrap; 
+}
+.form-group{
+    display:flex; 
+    flex-direction:column; 
+    gap:6px; 
+}
+.form-group label{
+    font-size:36px; 
+    font-weight:bold; 
+    margin-bottom:6px; 
+    color:#38bdf8; 
+}
+.select-row{
+    display:flex; 
+    gap:10px; 
+    align-items:center; 
+}
+
+/* CIRCUIT TABLE BORDERS */
+.circuit-box-start td{
+    border-top:4px solid #02090cd0; 
+}
+.circuit-box-end td{
+    border-bottom:4px solid #02090cd0; 
+}
+.circuit-separator td {
+    border-top: 4px solid black; 
+}
+</style>
+</head>
+<body>
+<h1>Circuit System</h1>
+
+<!-- TREE -->
+<div id="tree" class="tree">
+    <div id="summary" class="summary"></div>
+</div>
+
+<div class="tooltip" id="tooltip"></div>
+
+<hr>
+
+<!-- FORMS -->
+<div class="form-row">
+    <!-- Select Circuit -->
+    <form method="POST" id="scisForm" class="form-group">
+        <label for="scis_select">Select Circuit</label>
+        <div class="select-row">
+            <select name="scis_select" id="scis_select">
+                {% for scis in scis_options %}
+                <option value="{{ scis }}" {% if scis == selected_scis %}selected{% endif %}> SCIS-{{ scis }} </option>
+                {% endfor %}
+                <option value="all" {% if selected_scis=="all" %}selected{% endif %}>Show All Circuits</option>
+            </select>
+            <button type="submit">Show</button>
+        </div>
+    </form>
+    <!-- Select Border -->
+    <form method="POST" id="borderForm" class="form-group">
+        <label for="border_select">Select Border</label>
+        <div class="select-row">
+            <select name="border_select" id="border_select">
+                {% for border in border_options %}
+                <option value="{{ border }}" {% if border == selected_border %}selected{% endif %}> {{ border }} </option>
+                {% endfor %}
+                <option value="all" {% if selected_border=="all" %}selected{% endif %}>Show All Borders</option>
+            </select>
+            <button type="submit">Show</button>
+        </div>
+    </form>
+
+    <!-- EXPORT BUTTON -->
+    <form method="POST" action="/export" class="form-group" style="margin-left:auto; align-self:flex-end;">
+        <input type="hidden" name="scis_select" id="export_scis" value="{{ selected_scis or '' }}">
+        <input type="hidden" name="border_select" id="export_border" value="{{ selected_border or '' }}">
+        <label>&nbsp;</label>
+        <button type="submit">Export Excel</button>
+    </form>
+    
+</div>
+
+<!-- TABLES -->
+{% if table %}
+<h3>{% if selected_scis=="all" %}All Circuits{% else %}Results for SCIS-{{ selected_scis }}{% endif %}</h3>
+<table id="resultsTable">
+<thead>
+<tr>
+<th>Circuit</th>
+<th>Port Capacity (Mbps)</th>
+<th>VLAN</th>
+<th>Capacity (Mbps)</th>
+<th>Total (Mbps)</th>
+<th>Border</th>
+</tr>
+</thead>
+<tbody>
+{% if selected_scis=="all" %}
+    {% set sorted_table = table | sort(attribute='Border Name') %}
+    {% for t in sorted_table %}
+        {% for row in t['rows'] %}
+        <tr {% if loop.first %}class="circuit-separator"{% endif %}>
+            {% if loop.first %}
+            <td rowspan="{{ t['rowspan'] }}">{{ t['Circuit Name'] }}</td>
+            <td rowspan="{{ t['rowspan'] }}">{{ t['Port Capacity'] }}</td>
+            {% endif %}
+            <td>{{ row['VLAN'] }}</td>
+            <td>{{ row['Capacity (Mbps)'] }}</td>
+            {% if loop.first %}
+            <td rowspan="{{ t['rowspan'] }}">{{ t['Total (Mbps)'] }}</td>
+            <td rowspan="{{ t['rowspan'] }}">{{ t['Border Name'] }}</td>
+            {% endif %}
+        </tr>
+        {% endfor %}
+    {% endfor %}
+{% else %}
+
+    {% for row in table['rows'] %}
+    <tr>
+        {% if loop.first %}
+        <td rowspan="{{ table['rowspan'] }}">{{ table['Circuit Name'] }}</td>
+        <td rowspan="{{ table['rowspan'] }}">{{ table['Port Capacity'] }}</td>
+        {% endif %}
+        <td>{{ row['VLAN'] }}</td>
+        <td>{{ row['Capacity (Mbps)'] }}</td>
+        {% if loop.first %}
+        <td rowspan="{{ table['rowspan'] }}">{{ table['Total (Mbps)'] }}</td>
+        <td rowspan="{{ table['rowspan'] }}">{{ table['Border Name'] }}</td>
+        {% endif %}
+    </tr>
+    {% endfor %}
+{% endif %}
+</tbody>
+</table>
+{% endif %}
+
+{% if border_table %}
+<h3>Border Circuits</h3>
+<table>
+<thead>
+<tr>
+<th>Border</th>
+<th>Port Capacity (Mbps)</th>
+<th>Used Capacity (Mbps)</th>
+<th>Circuit</th>
+<th>Port Capacity (Mbps)</th>
+<th>VLAN</th>
+<th>Capacity (Mbps)</th>
+<th>Total (Mbps)</th>
+</tr>
+</thead>
+<tbody>
+{% if selected_border=="all" %}
+{% for border in border_table %}
+{% for row in border['rows'] %}
+<tr class="{% if row.show_circuit %}circuit-box-start{% endif %}">
+{% if loop.first %}
+<td rowspan="{{ border['rowspan'] }}">{{ border['Border'] }}</td>
+<td rowspan="{{ border['rowspan'] }}">{{ border['Border Port'] }}</td>
+<td rowspan="{{ border['rowspan'] }}" style=" {% if border['Used_Percent']>80 %} background:#dc2626; {% elif border['Used_Percent']>60 %} background:#f59e0b; {% else %} background:#16a34a; {% endif %} color:white; border-radius:10px;">
+{{ border['Used Capacity'] }}
+</td>
+{% endif %}
+{% if row.show_circuit %}
+<td rowspan="{{ row.rowspan_circuit }}">{{ row['Circuit'] }}</td>
+<td rowspan="{{ row.rowspan_circuit }}">{{ row['Port'] }}</td>
+{% endif %}
+<td>{{ row['VLAN'] }}</td>
+<td>{{ row['Capacity (Mbps)'] }}</td>
+{% if row.show_circuit %}
+<td rowspan="{{ row.rowspan_circuit }}">{{ row.total_capacity_circuit }}</td>
+{% endif %}
+</tr>
+{% endfor %}
+{% endfor %}
+{% else %}
+{% for row in border_table['rows'] %}
+<tr class="{% if row.show_circuit %}circuit-box-start{% endif %}">
+{% if loop.first %}
+<td rowspan="{{ border_table['rowspan'] }}">{{ border_table['Border'] }}</td>
+<td rowspan="{{ border_table['rowspan'] }}">{{ border_table['Border Port'] }}</td>
+<td rowspan="{{ border_table['rowspan'] }}" style=" {% if border_table['Used_Percent']>80 %} background:#dc2626; {% elif border_table['Used_Percent']>60 %} background:#f59e0b; {% else %} background:#16a34a; {% endif %} color:white; border-radius:10px;">
+{{ border_table['Used Capacity'] }}
+</td>
+{% endif %}
+{% if row.show_circuit %}
+<td rowspan="{{ row.rowspan_circuit }}">{{ row['Circuit'] }}</td>
+<td rowspan="{{ row.rowspan_circuit }}">{{ row['Port'] }}</td>
+{% endif %}
+<td>{{ row['VLAN'] }}</td>
+<td>{{ row['Capacity (Mbps)'] }}</td>
+{% if row.show_circuit %}
+<td rowspan="{{ row.rowspan_circuit }}">{{ row.total_capacity_circuit }}</td>
+{% endif %}
+</tr>
+{% endfor %}
+{% endif %}
+</tbody>
+</table>
+{% endif %}
+
+<script>
+const data = {{ capacity_tree|tojson }};
+
+/* COLORS */
+function serviceColor(name){
+    switch(name){
+        case "FTTH": return "#22c55e";
+        case "Wireless": return "#f59e0b";
+        case "Hala FTTH": return "#ef4444";
+        case "Sur3at Albarq": return "#8b5cf6";
+        case "Tech Resource": return "#06b6d4";
+        case "Skopesky": return "#14b8a6";
+        default: return "#2563eb";
+    }
+}
+
+/* BUILD SERVICE TOTALS */
+function buildServiceTotals(tree){
+    let totals={};
+    tree.children.forEach(board=>{
+        (board.children || []).forEach(service=>{
+            if(!totals[service.name]) totals[service.name]=0;
+            totals[service.name]+=service.value;
+        });
+    });
+    return totals;
+}
+
+/* SERVICE CIRCLES */
+function buildSummary(tree){
+    const summary=document.getElementById("summary");
+    const totals=buildServiceTotals(tree);
+    const top=["FTTH","Wireless","Hala FTTH"];
+    const bottom=["Tech Resource","Sur3at Albarq","Skopesky"];
+    const row1=document.createElement("div");
+    row1.className="summary-row";
+    top.forEach(s=>{
+        if(totals[s]){
+            const c=document.createElement("div");
+            c.className="circle";
+            c.style.width="200px";
+            c.style.height="200px";
+            c.style.background=serviceColor(s);
+            c.innerHTML=`<span>${s}</span><span>${totals[s].toLocaleString()} Mbps</span>`;
+            row1.appendChild(c);
+        }
+    });
+    summary.appendChild(row1);
+    const row2=document.createElement("div");
+    row2.className="summary-row";
+    bottom.forEach(s=>{
+        if(totals[s]){
+            const c=document.createElement("div");
+            c.className="circle";
+            c.style.width="200px";
+            c.style.height="200px";
+            c.style.background=serviceColor(s);
+            c.innerHTML=`<span>${s}</span><span>${totals[s].toLocaleString()} Mbps</span>`;
+            row2.appendChild(c);
+        }
+    });
+    summary.appendChild(row2);
+}
+buildSummary(data);
+
+/* ===== TREE ===== */
+const container=document.querySelector(".tree");
+const width=container.clientWidth;
+const root=d3.hierarchy(data);
+const treeLayout=d3.tree().size([900,width-300]);
+treeLayout(root);
+const maxX=d3.max(root.descendants(),d=>d.x);
+const height=maxX+140;
+container.style.height=height+"px";
+
+/* ===== ZOOM ===== */
+const svg=d3.select("#tree")
+    .append("svg")
+    .attr("width",width)
+    .attr("height",height)
+    .call(
+        d3.zoom().scaleExtent([0.6,2])
+        .on("zoom",e=>g.attr("transform",e.transform))
+    );
+const g=svg.append("g")
+    .attr("transform","translate(150,60)");
+
+/* ===== LINKS ===== */
+g.selectAll(".link")
+    .data(root.links())
+    .enter()
+    .append("path")
+    .attr("class","link")
+    .attr("d",d3.linkHorizontal().x(d=>d.y).y(d=>d.x));
+
+/* ===== TOOLTIP ===== */
+const tooltip=document.getElementById("tooltip");
+
+/* ===== NODES ===== */
+const node=g.selectAll(".node")
+    .data(root.descendants())
+    .enter()
+    .append("g")
+    .attr("class","node")
+    .attr("transform",d=>`translate(${d.y},${d.x})`)
+    .on("mousemove",(e,d)=>{
+        tooltip.style.opacity=1;
+        tooltip.innerHTML=`<b>${d.data.name}</b><br>${d.data.value ? d.data.value.toLocaleString()+" Mbps":""}`;
+        tooltip.style.left=e.pageX+10+"px";
+        tooltip.style.top=e.pageY-20+"px";
+    })
+    .on("mouseout",()=>tooltip.style.opacity=0);
+
+/* ===== RECTANGLE ===== */
+node.append("rect")
+    .attr("x",d=> d.data.name==="Total Capacity" ? -150 : -120)
+    .attr("y",-28)
+    .attr("width",d=> d.data.name==="Total Capacity" ? 300 : 240)
+    .attr("height",d=> d.data.name==="Total Capacity" ? 56 : 48)
+    .attr("fill",d=>serviceColor(d.data.name))
+    .attr("rx",24)
+    .attr("ry",24)
+    .style("stroke","#38bdf8")
+    .style("stroke-width",3)
+    .style("filter","drop-shadow(0px 6px 10px rgba(0,0,0,0.7))");
+
+/* ===== TEXT ===== */
+node.append("text")
+    .text(d=>{
+        if(d.data.value){
+            return `${d.data.name}: ${d.data.value.toLocaleString()} Mbps`;
+        }
+        return d.data.name;
+    })
+    .attr("x",0)
+    .attr("y",0)
+    .attr("text-anchor","middle")
+    .attr("dominant-baseline","middle")
+    .style("font-size","18px")
+    .style("pointer-events","none");
+
+/* ===== ANIMATION ===== */
+node.style("opacity",0)
+    .transition()
+    .duration(700)
+    .style("opacity",1);
+
+/* ===== SCROLL ===== */
+document.getElementById("scisForm").addEventListener("submit",function(){
+    localStorage.setItem("scrollToTable","scis");
+});
+document.getElementById("borderForm").addEventListener("submit",function(){
+    localStorage.setItem("scrollToTable","border");
+});
+window.onload=function(){
+    const scrollType = localStorage.getItem("scrollToTable");
+    if(scrollType){
+        if(scrollType==="scis"){
+            const table = document.getElementById("resultsTable");
+            if(table) table.scrollIntoView({behavior:"smooth"});
+        }
+        else if(scrollType==="border"){
+            const table = document.querySelector("table tbody");
+            if(table) table.scrollIntoView({behavior:"smooth"});
+        }
+        localStorage.removeItem("scrollToTable");
+    }
+}
+
+/* ===== UPDATE EXPORT HIDDEN VALUES ===== */
+const scisSelect = document.getElementById("scis_select");
+const borderSelect = document.getElementById("border_select");
+const exportScis = document.getElementById("export_scis");
+const exportBorder = document.getElementById("export_border");
+
+scisSelect.addEventListener("change", () => {
+    exportScis.value = scisSelect.value;
+});
+borderSelect.addEventListener("change", () => {
+    exportBorder.value = borderSelect.value;
+});
+</script>
+</body>
+</html>
